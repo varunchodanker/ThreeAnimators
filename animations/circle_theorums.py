@@ -4,7 +4,7 @@ import numpy as np
 
 class CircleTheorems(Scene):
     def construct(self):
-        self.theorem_2()
+        self.theorem_1()
 
     def theorem_2(self):
         d = Dot().set_color(BLUE).move_to(3 * UP)
@@ -92,6 +92,9 @@ class CircleTheorems(Scene):
             run_time=5.1
         )
 
+    def generate_mv1(self, fed, rd): 
+                        return Line(fed.get_center(), rd.get_center())
+
     def theorem_1(self):
             circle = Circle().scale(3).set_color(WHITE) #default circle with radius 3 in the manim grid
             centerDot = Dot()
@@ -105,7 +108,7 @@ class CircleTheorems(Scene):
             rightDot = Dot().shift(3*DOWN)
 
             moving_line1 = always_redraw(
-                lambda: Line(fixedEdgeDot.get_center(), rightDot.get_center())
+                lambda: self.generate_mv1(fixedEdgeDot,rightDot)
             )
             moving_line2 = always_redraw(
                 lambda: Line(fixedEdgeDot.get_center(), leftDot.get_center())
