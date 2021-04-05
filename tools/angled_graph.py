@@ -146,6 +146,30 @@ class AngledGraph():
         input_scene.remove(self.angles)
         self.angles = VGroup()
 
+    def generate_angle_arc(self, givenEdges):
+        #generates the image to show an angle
+
+        #Determine the intersection point of the two edges which the angle 
+        #will be centered about
+        intersection_point = self.vertices[givenEdges[0][1]].get_center()
+
+        #Determine the angle of the two edges away from the intersection
+        edge1 = self.edges[givenEdges[0]]
+        edge1_angle = angle_of_vector(edge1.get_start() - edge1.get_end())
+        edge2_angle = self.edges[givenEdges[1]].get_angle()
+
+        #Determine the start angle, end angle and angle magnitude
+        start = min(edge1_angle,edge2_angle)
+        end = max(edge1_angle,edge2_angle)
+        magnitude = end - start
+
+        return Arc(
+            arc_center = intersection_point,
+            radius = 0.3,
+            start_angle = start,
+            angle = magnitude
+        )
+
     def add_angles(self, input_scene, angles):
         # Method to add all the given angles to the scene. Angles are passed into 
         # this function with a dictionary where the keys represent the pair of 
@@ -158,27 +182,11 @@ class AngledGraph():
 
         # Iterate through the passed in dictionary to consider each angle
         for givenEdges,av in angles.items():
-            #Determine the intersection point of the two edges which the angle 
-            #will be centered about
-            intersection_point = self.vertices[givenEdges[0][1]].get_center()
-
-            #Determine the angle of the two edges away from the intersection
-            edge1 = self.edges[givenEdges[0]]
-            edge1_angle = angle_of_vector(edge1.get_start() - edge1.get_end())
-            edge2_angle = self.edges[givenEdges[1]].get_angle()
-
-            #Determine the start angle, end angle and angle magnitude
-            start = min(edge1_angle,edge2_angle)
-            end = max(edge1_angle,edge2_angle)
-            magnitude = end - start
-
             #create the actual angle
-            self.angles += Arc(
-                arc_center = intersection_point,
-                radius = 0.3,
-                start_angle = start,
-                angle = magnitude
-            )
+            self.angles += always_redraw(
+                    lambda : 
+                       self.generate_angle_arc(givenEdges) 
+                )
 
         # Finally, add the angles to the scene
         input_scene.add(self.angles)
@@ -199,14 +207,14 @@ class AngledGraphTest(Scene):
         my_angled_graph.add(self) 
         self.wait()
 
+        #adding angles test
+        my_angled_graph.add_angles(self, {(("A","B"),("B","C")) : 0})
+        self.wait()
+
         #moving a single vertex test
         # my_angled_graph.move_vertex(self, "A", (-1,-1))
         # self.wait()
 
         #moving multiple vertices test
         my_angled_graph.move_vertices(self, A = (-1,-1), B = (-1,0))
-        self.wait()
-
-        #adding angles test
-        my_angled_graph.add_angles(self, {(("A","B"),("B","C")) : 0})
         self.wait()
