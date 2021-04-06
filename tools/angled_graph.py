@@ -31,15 +31,7 @@ class AngledGraph():
             new_line = Line (
                 self.vertices[vertex1_label].get_center(), 
                 self.vertices[vertex2_label].get_center()
-                )
-                # .add_updater(lambda mobj, dt : 
-                #     mobj.put_start_and_end_on(
-                #         self.vertices[vertex1_label].get_center(), 
-                #         self.vertices[vertex2_label].get_center()
-                #     )
-                # )
-                #always_redraw(lambda : )
-    
+            )
             self.edges[(vertex1_label, vertex2_label)] = new_line
             self.image += new_line
 
@@ -55,6 +47,44 @@ class AngledGraph():
 
         input_scene.remove(self.image)
 
+    def update_with_vertex_end(self, vertex):
+        #Update function for a line based on a vertex. Updates the end of the 
+        #line based on the vertex.
+        
+        return lambda line : line.put_start_and_end_on(line.start, vertex.get_center())
+
+    def update_with_vertex_start(self, vertex):
+        #Update function for a line based on a vertex. Updates the start of the 
+        #line based on the vertex.
+    
+        return lambda line : line.put_start_and_end_on(vertex.get_center(), line.end)
+
+    def update_with_vertices_both(self, vertex1, vertex2):
+        # Updates both the start and the end of the line with the given vertices. 
+        # The first vertex is used to update the start and the second vertex is 
+        # used to update the end.
+
+        return lambda line : line.put_start_and_end_on(vertex1.get_center(), vertex2.get_center())
+
+    def update_with_vertices(self, vertices):
+        #Update function for a line based on a vertex. A value is given as an 
+        #argument along with the vertex in order to indicate whether the start 
+        #or end of the line should be dependent on the vertex. 0 indicates the 
+        #start of the line should be dependent on the vertex and 1 indicates 
+        #the end of the line should be dependent on the vertex
+        
+        if vertices[0] is None:
+            #only updated on one vertex, second element, for its end
+            return self.update_with_vertex_end(vertices[1])
+        elif vertices[1] is None:
+            #only updated on one vertex, first element, for its start
+            return self.update_with_vertex_start(vertices[0])
+        else:
+            #Updated on both vertices. The first element updates its start and 
+            #the second element updates its end.
+            return self.update_with_vertices_both(vertices[0],vertices[1])
+
+
     def move_vertex(self, input_scene, vertex_label, new_coordinates):
         # This method takes the given scene (first argument) and moves 
         # the vertex corresponding the label (second argument) to the 
@@ -69,24 +99,26 @@ class AngledGraph():
         #moved
         vertex = self.vertices[vertex_label]
 
-        #create target instance for final position
-        vertex.generate_target()
-        vertex.target.move_to(RIGHT*right_sf+UP*up_sf)
-
         #generate the animations required to move the vertex - this includes
         #the animations for the vertex and edges
         animations = []
-        animations.append(MoveToTarget(vertex))
+        animations.append(vertex.animate.move_to(np.array([right_sf,up_sf,0])))
 
         for labels, line in self.edges.items():
             if labels[0] == vertex_label:
-                line.generate_target()
-                line.target.put_start_and_end_on(RIGHT*right_sf+UP*up_sf, line.end)
-                animations.append(MoveToTarget(line))
+                animations.append(
+                    UpdateFromFunc(
+                        mobject = line,
+                        update_function = lambda line : line.put_start_and_end_on(vertex.get_center(), line.end)
+                    )
+                )
             elif labels[1] == vertex_label:
-                line.generate_target()
-                line.target.put_start_and_end_on(line.start, RIGHT*right_sf+UP*up_sf)
-                animations.append(MoveToTarget(line))
+                animations.append(
+                    UpdateFromFunc(
+                        mobject = line,
+                        update_function = lambda line : line.put_start_and_end_on(line.start, vertex.get_center())
+                    )
+                )
 
         #finally perform
         input_scene.play(
@@ -103,9 +135,7 @@ class AngledGraph():
         #vertex and edge animations.
         animations = []
 
-        #generate targets for each edge
-        for line in self.edges.values():
-            line.generate_target()
+        edge_mappings = {} 
 
         #consider each vertex and the corresponding coordinates that it should 
         #be moved to
@@ -118,23 +148,54 @@ class AngledGraph():
             #be moved
             vertex = self.vertices[vertex_label]
 
-            #create target instance for the final position
-            vertex.generate_target()
-            vertex.target.move_to(RIGHT*right_sf+UP*up_sf)
-
             #consider vertex animation
-            animations.append(MoveToTarget(vertex))
+            animations.append(
+                vertex.animate.move_to(np.array([right_sf,up_sf,0]))
+            )
+
+            #Dictionary that maps edges to the pair of vertices they are 
+            #updated with. The first vertex corresponds to the start of the 
+            # edge and the second vertex corresponds to the end of the edge.
 
             #consider attached edge animations
             for labels,line in self.edges.items():
                 if labels[0] == vertex_label:
-                    line.target = Line(RIGHT*right_sf+UP*up_sf, line.target.end)
+                    if line in edge_mappings.keys():
+                        #already updated based on one vertex - preserve this
+                        prev = edge_mappings[line][1]
+                        edge_mappings[line] = (vertex,prev)
+                    else:
+                        #otherwise
+                        edge_mappings[line] = (vertex,None)
                 elif labels[1] == vertex_label:
-                    line.target = Line(line.target.start, RIGHT*right_sf+UP*up_sf)
-            
-        #   add the animations for the movements of each edge
-        for line in self.edges.values():
-            animations.append(MoveToTarget(line))
+                    if line in edge_mappings.keys():
+                        #already updated based on one vertex - preserve this
+                        prev = edge_mappings[line][0]
+                        edge_mappings[line] = (prev,vertex)
+                    else:
+                        #otherwise
+                        edge_mappings[line] = (None,vertex)
+        
+        #consider how each edge should be updated based on how many and which 
+        #vertices it is related to
+        for line,vertices in edge_mappings.items():
+            animations.append(
+                UpdateFromFunc(
+                    mobject = line,
+                    update_function = self.update_with_vertices(vertices)
+                )
+            )    
+
+        ##
+        
+        
+        # animations.append(
+        #                 UpdateFromFunc(
+        #                     mobject = line,
+        #                     update_function = self.update_with_vertex(vertex,1)
+        #                 )
+        # )
+        ##
 
         #finally perform the animations to move the vertices
         input_scene.play(
