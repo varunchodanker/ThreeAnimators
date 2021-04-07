@@ -18,7 +18,9 @@ class AngledGraph():
         self.vertices = {}
         self.edges = {}
         #group of all angles that are displayed on screen
-        self.angles = VGroup()
+        self.angleImage = VGroup()
+        #mappings of angles from the edges they are about
+        self.angles = {}
 
         for (vertex_label, coordinates) in vertices_input.items():
             right_sf = coordinates[0]
@@ -47,6 +49,19 @@ class AngledGraph():
 
         input_scene.remove(self.image)
 
+    @staticmethod
+    def generate_edge(edge, vertex1, vertex2):
+        new_start = edge.start if vertex1 is None else vertex1.get_center()
+        new_end = edge.end if vertex2 is None else vertex2.get_center()
+        
+        new_line = Line(
+            new_start,
+            new_end
+        )
+
+        new_line.set_start_and_end_attrs(new_start,new_end)
+        return new_line
+
     def update_with_vertex_end(self, vertex):
         #Update function for a line based on a vertex. Updates the end of the 
         #line based on the vertex.
@@ -73,17 +88,22 @@ class AngledGraph():
         #start of the line should be dependent on the vertex and 1 indicates 
         #the end of the line should be dependent on the vertex
         
-        if vertices[0] is None:
-            #only updated on one vertex, second element, for its end
-            return self.update_with_vertex_end(vertices[1])
-        elif vertices[1] is None:
-            #only updated on one vertex, first element, for its start
-            return self.update_with_vertex_start(vertices[0])
-        else:
-            #Updated on both vertices. The first element updates its start and 
-            #the second element updates its end.
-            return self.update_with_vertices_both(vertices[0],vertices[1])
+        # if vertices[0] is None:
+        #     #only updated on one vertex, second element, for its end
+        #     return self.update_with_vertex_end(vertices[1])
+        # elif vertices[1] is None:
+        #     #only updated on one vertex, first element, for its start
+        #     return self.update_with_vertex_start(vertices[0])
+        # else:
+        #     #Updated on both vertices. The first element updates its start and 
+        #     #the second element updates its end.
+        #     return self.update_with_vertices_both(vertices[0],vertices[1])
+            
+        return lambda line : line.become(AngledGraph.generate_edge(line,vertices[0],vertices[1]))
 
+    def update_for_angle(self, edge1, edge2, intersection_vertex):
+        #returns a function to update an angle based on the given parameters
+        return lambda angle : angle.become(AngledGraph.generate_angle_arc(edge1, edge2, intersection_vertex))
 
     def move_vertex(self, input_scene, vertex_label, new_coordinates):
         # This method takes the given scene (first argument) and moves 
@@ -166,7 +186,7 @@ class AngledGraph():
                         edge_mappings[line] = (vertex,prev)
                     else:
                         #otherwise
-                        edge_mappings[line] = (vertex,None)
+                        edge_mappings[line] = (vertex,self.vertices[labels[1]])
                 elif labels[1] == vertex_label:
                     if line in edge_mappings.keys():
                         #already updated based on one vertex - preserve this
@@ -174,7 +194,7 @@ class AngledGraph():
                         edge_mappings[line] = (prev,vertex)
                     else:
                         #otherwise
-                        edge_mappings[line] = (None,vertex)
+                        edge_mappings[line] = (self.vertices[labels[0]],vertex)
         
         #consider how each edge should be updated based on how many and which 
         #vertices it is related to
@@ -197,6 +217,14 @@ class AngledGraph():
         # )
         ##
 
+        for (edge1,edge2,intersection_vertex),angle in self.angles.items():
+            animations.append(
+                UpdateFromFunc(
+                    mobject = angle,
+                    update_function = self.update_for_angle(edge1,edge2,intersection_vertex)
+                )
+            )
+
         #finally perform the animations to move the vertices
         input_scene.play(
             *animations
@@ -204,20 +232,21 @@ class AngledGraph():
 
     def remove_angles(self, input_scene):
         #Method to remove all angle images from the given scene
-        input_scene.remove(self.angles)
-        self.angles = VGroup()
+        input_scene.remove(self.angleImage)
+        self.angleImage = VGroup()
+        self.angles = {}
 
-    def generate_angle_arc(self, givenEdges):
+    @staticmethod
+    def generate_angle_arc(edge1, edge2, intersection_vertex):
         #generates the image to show an angle
 
         #Determine the intersection point of the two edges which the angle 
         #will be centered about
-        intersection_point = self.vertices[givenEdges[0][1]].get_center()
+        intersection_point = intersection_vertex.get_center()
 
         #Determine the angle of the two edges away from the intersection
-        edge1 = self.edges[givenEdges[0]]
         edge1_angle = angle_of_vector(edge1.get_start() - edge1.get_end())
-        edge2_angle = self.edges[givenEdges[1]].get_angle()
+        edge2_angle = edge2.get_angle()
 
         #Determine the start angle, end angle and angle magnitude
         start = min(edge1_angle,edge2_angle)
@@ -244,13 +273,15 @@ class AngledGraph():
         # Iterate through the passed in dictionary to consider each angle
         for givenEdges,av in angles.items():
             #create the actual angle
-            self.angles += always_redraw(
-                    lambda : 
-                       self.generate_angle_arc(givenEdges) 
-                )
+            edge1 = self.edges[givenEdges[0]]
+            edge2 = self.edges[givenEdges[1]]
+            intersection_vertex = self.vertices[givenEdges[0][1]]
+            new_angle = AngledGraph.generate_angle_arc(edge1, edge2, intersection_vertex)
+            self.angles[(edge1,edge2,intersection_vertex)] = new_angle
+            self.angleImage += new_angle
 
         # Finally, add the angles to the scene
-        input_scene.add(self.angles)
+        input_scene.add(self.angleImage)
     
 
 class AngledGraphTest(Scene):
@@ -269,7 +300,15 @@ class AngledGraphTest(Scene):
         self.wait()
 
         #adding angles test
-        my_angled_graph.add_angles(self, {(("A","B"),("B","C")) : 0})
+        my_angled_graph.add_angles(
+            self, 
+            {
+                (("A","B"),("B","C")) : 0,
+                (("B","C"),("C","D")) : 0,
+                (("C","D"),("D","A")) : 0,
+                (("D","A"),("A","B")) : 0,
+            }
+        )
         self.wait()
 
         #moving a single vertex test
@@ -278,4 +317,7 @@ class AngledGraphTest(Scene):
 
         #moving multiple vertices test
         my_angled_graph.move_vertices(self, A = (-1,-1), B = (-1,0))
+        self.wait()
+
+        my_angled_graph.move_vertices(self, C = (0,0), D = (0,-1))
         self.wait()
