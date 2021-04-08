@@ -321,3 +321,6 @@ class AngledGraphTest(Scene):
 
         my_angled_graph.move_vertices(self, C = (0,0), D = (0,-1))
         self.wait()
+
+        my_angled_graph.move_vertices(self, A = (-2,-2))
+        self.wait()
