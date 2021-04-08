@@ -253,12 +253,31 @@ class AngledGraph():
         end = max(edge1_angle,edge2_angle)
         magnitude = end - start
 
-        return Arc(
-            arc_center = intersection_point,
-            radius = 0.3,
-            start_angle = start,
-            angle = magnitude
-        )
+        #if the angle is reflex, convert it to the corresponding non-reflex angle
+        if magnitude > PI:
+            magnitude = magnitude - 2 * PI 
+
+        #determine whether it is a right angle or not
+        if PI/2 - 0.01 < magnitude < PI/2 + 0.01 or 0.01 - PI/2 > magnitude > - PI/2 - 0.01:
+            to_start = np.array([np.cos(edge1_angle),np.sin(edge1_angle),0]) * 0.30
+            to_end = np.array([np.cos(edge2_angle),np.sin(edge2_angle),0]) * 0.30
+            right_angle = Polygon(
+                intersection_point,
+                intersection_point + to_start,
+                intersection_point + to_start + to_end,
+                intersection_point + to_end
+            )
+            right_angle.set_z_index(-1)
+            # .set_color(BLUE)
+            # .set_fill(RED,0)
+            return right_angle
+        else:
+            return Arc(
+                arc_center = intersection_point,
+                radius = 0.3,
+                start_angle = start,
+                angle = magnitude
+            )
 
     def add_angles(self, input_scene, angles):
         # Method to add all the given angles to the scene. Angles are passed into 
